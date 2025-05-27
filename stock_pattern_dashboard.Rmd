@@ -1,0 +1,100 @@
+```{r}
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(plotly)
+```
+
+
+```{r}
+stock_data <- read_csv("C:/Users/91886/Downloads/combined_stock_data.csv")
+stock_data$Date <- as.Date(stock_data$Date, format = "%d-%m-%Y")
+```
+
+```{r}
+# Define UI
+ui <- fluidPage(
+  titlePanel("📈 Stock Pattern Intelligence Dashboard"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("company", "Select Company:", choices = unique(stock_data$Company), 
+                  selected = c("Apple", "Amazon"), multiple = TRUE),
+      dateRangeInput("date_range", "Select Date Range:", 
+                     start = min(stock_data$Date), end = max(stock_data$Date))
+    ),
+    
+    mainPanel(
+      tabsetPanel(
+        tabPanel("Q1: Price Trends", plotlyOutput("pricePlot")),
+        tabPanel("Q2: Trading Volume", plotlyOutput("volumePlot")),
+        tabPanel("Q3: Price vs Volume Change", plotlyOutput("scatterPlot")),
+        tabPanel("Q4: MA Crossovers", plotlyOutput("maPlot"))
+      )
+    )
+  )
+)
+```
+
+```{r}
+# Define Server
+server <- function(input, output) {
+  
+  filtered_data <- reactive({
+    stock_data %>%
+      filter(Company %in% input$company, Date >= input$date_range[1], Date <= input$date_range[2])
+  })
+  
+  # Q1: Closing Prices Over Time
+  output$pricePlot <- renderPlotly({
+    ggplotly(
+      ggplot(filtered_data(), aes(x = Date, y = Close, color = Company)) +
+        geom_line() +
+        labs(title = "Q1: Closing Prices Over Time", y = "Closing Price (USD)", x = "Date")
+    )
+  })
+  
+  # Q2: Trading Volume Trends
+  output$volumePlot <- renderPlotly({
+    ggplotly(
+      ggplot(filtered_data(), aes(x = Date, y = Volume, fill = Company)) +
+        geom_bar(stat = "identity") +
+        labs(title = "Q2: Trading Volume Trends Over Time", y = "Volume", x = "Date")
+    )
+  })
+  
+  # Q3: Price vs Volume Change
+  output$scatterPlot <- renderPlotly({
+    ggplotly(
+      ggplot(filtered_data(), aes(x = `percentage change in price`, y = `percent change in volume`, color = Company)) +
+        geom_point(alpha = 0.7) +
+        labs(title = "Q3: Price vs Volume Change", x = "% Change in Price", y = "% Change in Volume")
+    )
+  })
+  
+  # Q4: MA50 vs MA200 Crossover Plot
+  output$maPlot <- renderPlotly({
+    ma_data <- filtered_data() %>%
+      filter(!is.na(MA50), !is.na(MA200))
+    
+    ggplotly(
+      ggplot(ma_data, aes(x = Date)) +
+        geom_line(aes(y = MA50, color = "MA50")) +
+        geom_line(aes(y = MA200, color = "MA200"), linetype = "dashed") +
+        facet_wrap(~Company) +
+        labs(title = "Q4: MA Crossovers (MA50 vs MA200)", y = "MA Value", x = "Date") +
+        scale_color_manual(values = c("MA50" = "blue", "MA200" = "orange"))
+    )
+  })
+}
+
+```
+
+
+```{r}
+
+# Run the App
+shinyApp(ui = ui, server = server)
+```
+
